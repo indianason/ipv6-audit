@@ -1,0 +1,41 @@
+[package]
+name = "ipv6-audit"
+version = "0.1.0"
+edition = "2021"
+authors = ["Transvina"]
+description = "Enterprise IPv6 infrastructure audit and readiness analyzer for the 2026-2030 Vietnamese transition mandate"
+repository = "https://github.com/YOUR_GITHUB_NAME/ipv6-audit"
+license = "Apache-2.0"
+keywords = ["ipv6", "audit", "analyzer", "networking", "cli"]
+categories = ["command-line-utilities", "network-programming"]
+
+[dependencies]
+# App Execution & Concurrency
+clap = { version = "4.6", features = ["derive"] }
+tokio = { version = "1.54", features = ["rt-multi-thread", "fs", "io-util", "macros"] }
+
+# Business Engine
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "rustls-native-certs", "json"] }
+hickory-resolver = { version = "0.26", features = ["tokio", "system-config"] }
+
+# Telemetry & Validation
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+thiserror = "2.0"
+csv = "1.4"
+
+# PDF Generation
+genpdf = { version = "0.2.0", features = ["images"] }
+
+# ==========================================
+# ONLY COMPILED DURING `cargo test`
+# ==========================================
+[dev-dependencies]
+# [Tier 1] Domain Testing
+proptest = "1.12"
+
+# [Tier 3] Black-box Integration Testing
+wiremock = "0.6"
+tempfile = "3.10"

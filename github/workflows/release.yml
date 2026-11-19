@@ -1,0 +1,119 @@
+name: Transvina IPv6-Audit CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*.*.*" ] # Triggers public release on version tags (e.g., v1.0.0)
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch: # Allows manual pipeline triggers
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # =========================================================
+  # STAGE 1: DOCTRINE ENFORCEMENT
+  # =========================================================
+  doctrine:
+    name: Enforce Testing Doctrine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dtolnay/rust-toolchain@stable
+      
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        
+      - name: Enforce Formatting
+        run: cargo fmt -- --check
+        
+      - name: Enforce Clippy Invariants
+        run: cargo clippy -- -D warnings
+        
+      - name: Execute Tier 1-3 Test Suite
+        run: cargo test --release
+
+  # =========================================================
+  # STAGE 2: CROSS-PLATFORM RELEASE BUILD
+  # =========================================================
+  build:
+    name: Build Standalone Binaries
+    needs: doctrine
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          # Windows Executable for Local Client Audits
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            ext: .exe
+          # Statically linked MUSL binary for Viettel IDC Servers
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            ext: ""
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install musl-tools (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+        
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+          
+      - name: Compile Optimized Binary
+        run: cargo build --release --target ${{ matrix.target }}
+        
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipv6-audit-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/ipv6-audit${{ matrix.ext }}
+          retention-days: 7
+
+  # =========================================================
+  # STAGE 3: GITHUB RELEASE PUBLISHING
+  # =========================================================
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write # Required to create the Release page
+    steps:
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ipv6-audit-x86_64-pc-windows-msvc
+          path: artifacts/windows
+          
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ipv6-audit-x86_64-unknown-linux-musl
+          path: artifacts/linux
+          
+      - name: Prepare Final Distribution Files
+        run: |
+          mv artifacts/windows/ipv6-audit.exe ipv6-audit-windows-amd64.exe
+          mv artifacts/linux/ipv6-audit ipv6-audit-linux-amd64
+          
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2 # Updated to v2
+        with:
+          files: |
+            ipv6-audit-windows-amd64.exe
+            ipv6-audit-linux-amd64
+          name: Transvina IPv6-Audit ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
