@@ -62,7 +62,9 @@ Run an audit against a specific domain with strict TLD glue compliance checks:
 ./ipv6-audit-linux-amd64 --domain [https://viettel.vn](https://viettel.vn) --strict-compliance
 ```
 (On Windows CMD, replace './ipv6-audit-linux-amd64' with 'ipv6-audit-windows-amd64.exe')
+
 or
+
 ```bash
 ipv6-audit -d viettel.vn --strict-compliance
 ```
@@ -75,7 +77,9 @@ Provide a newline-delimited list of domains ('targets.txt') to audit an entire e
 ./ipv6-audit-linux-amd64 --file targets.txt --strict-compliance
 ```
 (On Windows CMD, replace './ipv6-audit-linux-amd64' with 'ipv6-audit-windows-amd64.exe')
+
 or
+
 ```bash
 ipv6-audit -i targets.txt --strict-compliance
 ```
