@@ -87,6 +87,21 @@ Note: The '--strict-compliance' flag forces a recursive root-to-TLD trace to enf
 
 ---
 
+## Audit Report Metrics
+
+The generated PDF and CSV dossiers include the following telemetry points for each target domain:
+
+| Field Name | Description |
+| :--- | :--- |
+| `web_ipv6_ready` | Does the root domain have a valid AAAA routing record? |
+| `web_ipv6_reachable` | Did the TLS client successfully complete a Layer-7 HTTP probe over IPv6? |
+| `mx_ipv6_ready` | Does the corporate Mail Exchange support IPv6 routing? |
+| `ns_ipv6_ready` | Do the Authoritative Nameservers support IPv6 routing? |
+| `strict_glue_ready` | Does the parent TLD registry contain the correct IPv6 delegation? |
+| `vulnerability_status` | The final synthesized architectural diagnosis. |
+
+---
+
 ## Architecture & Quality Doctrine
 
 Built in Rust following a strict **3-Tier Testing Doctrine**:
@@ -96,20 +111,6 @@ Built in Rust following a strict **3-Tier Testing Doctrine**:
 * **Tier 2 (Unit Verification):** Deterministic validation of DNS primitives, sanitization rules, and DTO mappings.
 
 * **Tier 3 (Black-Box Integration):** Network chaos simulation ('wiremock') and end-to-end PDF/CSV filesystem rendering tests.
-
----
-
-## Understanding the Telemetry
-
-The engine outputs a highly structured CSV and an executive-ready PDF mapping the exact architectural state of the target:
-
-Column, Description
-'web_ipv6_ready', Does the root domain have a valid AAAA routing record?
-'web_ipv6_reachable', Did the TLS client successfully complete a Layer-7 HTTP probe over IPv6?
-'mx_ipv6_ready', Does the corporate Mail Exchange support IPv6 routing?
-'ns_ipv6_ready], Do the Authoritative Nameservers support IPv6 routing?
-'strict_glue_ready', Does the parent TLD registry contain the correct IPv6 delegation?
-'vulnerability_status', The final synthesized architectural diagnosis.
 
 ---
 
