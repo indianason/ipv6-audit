@@ -57,13 +57,15 @@ cargo install --path .
 
 ### Single-Target Audit
 
+#### After downloading Pre-compiled Binaries
+
 Run an audit against a specific domain with strict TLD glue compliance checks:
 ```bash
 ./ipv6-audit-linux-amd64 --domain [https://viettel.vn](https://viettel.vn) --strict-compliance
 ```
 (On Windows CMD, replace './ipv6-audit-linux-amd64' with 'ipv6-audit-windows-amd64.exe')
 
-or
+#### After building from Source
 
 ```bash
 ipv6-audit -d viettel.vn --strict-compliance
@@ -71,6 +73,8 @@ ipv6-audit -d viettel.vn --strict-compliance
 Note: The '--strict-compliance' flag forces a recursive root-to-TLD trace to enforce IPv6 Glue Record compliance.
 
 ### Batch Infrastructure Audit
+
+#### After downloading Pre-compiled Binaries
 
 Provide a newline-delimited list of domains ('targets.txt') to audit an entire enterprise portfolio:
 ```bash
@@ -83,7 +87,7 @@ Note for Windows users: Because the executable is completely self-contained, you
 ipv6-audit-windows-amd64.exe --file C:\Users\Admin\Downloads\targets.txt --strict-compliance
 ```
 
-or
+#### After building from Source
 
 ```bash
 ipv6-audit -i targets.txt --strict-compliance
