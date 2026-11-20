@@ -99,13 +99,13 @@ Built in Rust following a strict **3-Tier Testing Doctrine**:
 
 The engine outputs a highly structured CSV and an executive-ready PDF mapping the exact architectural state of the target:
 
-Column,Description
-web_ipv6_ready,Does the root domain have a valid AAAA routing record?
-web_ipv6_reachable,Did the TLS client successfully complete a Layer-7 HTTP probe over IPv6?
-mx_ipv6_ready,Does the corporate Mail Exchange support IPv6 routing?
-ns_ipv6_ready,Do the Authoritative Nameservers support IPv6 routing?
-strict_glue_ready,Does the parent TLD registry contain the correct IPv6 delegation?
-vulnerability_status,The final synthesized architectural diagnosis.
+Column, Description
+'web_ipv6_ready', Does the root domain have a valid AAAA routing record?
+'web_ipv6_reachable', Did the TLS client successfully complete a Layer-7 HTTP probe over IPv6?
+'mx_ipv6_ready', Does the corporate Mail Exchange support IPv6 routing?
+'ns_ipv6_ready], Do the Authoritative Nameservers support IPv6 routing?
+'strict_glue_ready', Does the parent TLD registry contain the correct IPv6 delegation?
+'vulnerability_status', The final synthesized architectural diagnosis.
 
 ---
 
