@@ -78,6 +78,11 @@ Provide a newline-delimited list of domains ('targets.txt') to audit an entire e
 ```
 (On Windows CMD, replace './ipv6-audit-linux-amd64' with 'ipv6-audit-windows-amd64.exe')
 
+Note for Windows users: Because the executable is completely self-contained, you can run it from any directory (such as your Downloads folder) by providing the absolute path to your target list:
+```DOS
+ipv6-audit-windows-amd64.exe --file C:\Users\Admin\Downloads\targets.txt --strict-compliance
+```
+
 or
 
 ```bash
