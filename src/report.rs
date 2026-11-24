@@ -2,14 +2,39 @@
 
 use image::{ImageFormat, RgbImage};
 use plotters::prelude::*;
+use plotters::style::{register_font, FontStyle};
 use std::error::Error;
 use std::fs;
 use std::io::Cursor;
+use std::sync::Once;
 
 use crate::dto::AuditReport;
 
+static INIT_FONTS: Once = Once::new();
+
+fn ensure_fonts_registered() {
+    INIT_FONTS.call_once(|| {
+        let _ = register_font(
+            "sans-serif",
+            FontStyle::Normal,
+            include_bytes!("../fonts/Roboto-Regular.ttf"),
+        );
+        let _ = register_font(
+            "sans-serif",
+            FontStyle::Bold,
+            include_bytes!("../fonts/Roboto-Bold.ttf"),
+        );
+        let _ = register_font(
+            "sans-serif",
+            FontStyle::Italic,
+            include_bytes!("../fonts/Roboto-Italic.ttf"),
+        );
+    });
+}
+
 // Generates a Happy Eyeballs waterfall chart in-memory and returns the PNG bytes.
 pub fn generate_waterfall_png(penalty_ms: u64) -> Result<Vec<u8>, Box<dyn Error>> {
+    ensure_fonts_registered();
     let root_width = 800;
     let root_height = 250;
     let mut pixel_buffer = vec![0u8; (root_width * root_height * 3) as usize];
@@ -80,7 +105,7 @@ pub fn generate_pdf(dossier: &[AuditReport], output_filename: &str) -> Result<()
         if let Some(penalty) = record.fallback_penalty_ms {
             if penalty > 0 {
                 if let Ok(png_bytes) = generate_waterfall_png(penalty) {
-                    let image_name = format!("{}_waterfall.png", record.domain.replace(".", "_"));
+                    let image_name = format!("{}_waterfall.png", record.domain.replace('.', "_"));
 
                     // Re-assign the builder and unwrap the Result with `?`
                     builder = builder.add_file(&image_name, png_bytes)?;

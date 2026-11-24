@@ -31,7 +31,17 @@ thiserror = "2.0"
 csv = "1.4"
 rustls-native-certs = "0.8.5"
 ring = "0.17.14"
-plotters = { version = "0.3.7", features = ["image"] }
+plotters = { version = "0.3.7", default-features = false, features = [
+    "bitmap_backend",
+    "bitmap_encoder",
+    "svg_backend",
+    "ab_glyph",
+    "line_series",
+    "area_series",
+    "histogram",
+    "full_palette",
+    "image",
+] }
 image = "0.25.10"
 typst-bake = "0.3.1"
 
