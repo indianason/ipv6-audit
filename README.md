@@ -65,32 +65,32 @@ Run an audit against a specific domain with strict TLD glue compliance checks:
 ```bash
 ./ipv6-audit-linux-amd64 --domain [https://viettel.vn](https://viettel.vn) --strict-compliance
 ```
-(On Windows CMD, replace './ipv6-audit-linux-amd64' with 'ipv6-audit-windows-amd64.exe')
+*(On Windows CMD, replace `./ipv6-audit-linux-amd64` with `ipv6-audit-windows-amd64.exe`)*
 
 #### After building from Source
 
 ```bash
 ipv6-audit -d viettel.vn --strict-compliance
 ```
-Note: The '--strict-compliance' flag forces a recursive root-to-TLD trace to enforce IPv6 Glue Record compliance.
+Note: The `--strict-compliance` flag forces a recursive root-to-TLD trace to enforce IPv6 Glue Record compliance.
 
 Run an audit against a specific domain, simulating Google Chrome's 300ms fallback delay timer to measure the QUIC Trap penalty:
 ```bash
 ipv6-audit --domain [https://aws.amazon.com/](https://aws.amazon.com/) --hev3-audit --emulate chrome
 ```
-Note: The engine will output structured JSON telemetry, generate an `aws.amazon.com_audit.csv`, and compile a heavily stylized `aws.amazon.com_audit.pdf` featuring the HEv3 waterfall chart.
+*Note: The engine will output structured JSON telemetry, generate an `aws.amazon.com_audit.csv`, and compile a heavily stylized `aws.amazon.com_audit.pdf` featuring the HEv3 waterfall chart.*
 
 ### Batch Infrastructure Audit
 
 #### After downloading Pre-compiled Binaries
 
-Provide a newline-delimited list of domains ('targets.txt') to audit an entire enterprise portfolio:
+Provide a newline-delimited list of domains (`targets.txt`) to audit an entire enterprise portfolio:
 ```bash
 ./ipv6-audit-linux-amd64 --file targets.txt --strict-compliance
 ```
-(On Windows CMD, replace './ipv6-audit-linux-amd64' with 'ipv6-audit-windows-amd64.exe')
+*(On Windows CMD, replace `./ipv6-audit-linux-amd64` with `ipv6-audit-windows-amd64.exe`)*
 
-Note for Windows users: Because the executable is completely self-contained, you can run it from any directory (such as your Downloads folder) by providing the absolute path to your target list:
+For Windows users: Because the executable is completely self-contained, you can run it from any directory (such as your `Downloads` folder) by providing the absolute path to your target list:
 ```DOS
 ipv6-audit-windows-amd64.exe --file C:\Users\Admin\Downloads\targets.txt --strict-compliance
 ```
@@ -103,9 +103,9 @@ ipv6-audit-windows-amd64.exe --file C:\Users\Admin\Downloads\targets.txt --hev3-
 ```bash
 ipv6-audit -i targets.txt --strict-compliance
 ```
-Note: The '--strict-compliance' flag forces a recursive root-to-TLD trace to enforce IPv6 Glue Record compliance.
+*Note: The `--strict-compliance` flag forces a recursive root-to-TLD trace to enforce IPv6 Glue Record compliance.*
 
-Provide a newline-delimited list of domains (targets.txt) to audit an entire enterprise portfolio concurrently:
+Provide a newline-delimited list of domains (`targets.txt`) to audit an entire enterprise portfolio concurrently:
 ```bash
 ipv6-audit -i targets.txt --hev3-audit --emulate safari
 ```
@@ -132,11 +132,11 @@ The generated PDF and CSV dossiers include the following telemetry points for ea
 
 Built in Rust following a strict **3-Tier Testing Doctrine** and automated DevSecOps CI/CD (`cargo audit --deny warnings`, `cargo fmt -- --check`, `cargo clippy --all-targets -- -D warnings`):
 
-* **Tier 1 (Domain Invariants):** Property-based testing ('proptest') validating domain sanitization, bracketed IPv6 parsing, HEv3 QUIC fallback state machine transitions, and diagnosis synthesis.
+* **Tier 1 (Domain Invariants):** Property-based testing (`proptest`) validating domain sanitization, bracketed IPv6 parsing, HEv3 QUIC fallback state machine transitions, and diagnosis synthesis.
 
 * **Tier 2 (Unit & Doc Verification):** Deterministic validation of DNS primitives, sanitization rules, public API doc-tests, and DTO mappings.
 
-* **Tier 3 (Black-Box Integration):** Network chaos simulation ('wiremock') and end-to-end embedded Typst PDF/CSV rendering tests.
+* **Tier 3 (Black-Box Integration):** Network chaos simulation (`wiremock`) and end-to-end embedded Typst PDF/CSV rendering tests.
 
 ---
 
