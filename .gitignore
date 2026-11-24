@@ -1,3 +1,17 @@
+# Rust build artifacts (includes target/rust-analyzer)
 /target
+
+# Local audit inputs & generated reports
 *.csv
-*.pdf 
+*.pdf
+*_waterfall.png
+targets.txt
+
+# Environment & secrets (v0.3.0 PostgreSQL / sqlx)
+.env
+.env.local
+
+# Editor & OS files
+.vscode/
+.DS_Store
+Thumbs.db

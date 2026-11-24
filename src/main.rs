@@ -4,96 +4,39 @@ mod dto;
 mod report;
 
 use clap::Parser;
+use hickory_resolver::TokioResolver;
+use rustls::crypto::ring::default_provider;
 use std::path::PathBuf;
 use std::sync::Arc;
-// use tokio::fs::File;
-// use tokio::io::{AsyncBufReadExt, BufReader};
-use hickory_resolver::TokioResolver;
-use reqwest::Client;
 use std::time::Duration;
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
-use tracing::{error, info, warn};
+use tracing::{error, info, warn, Level};
 
 use ipv6_audit::engine::scan_endpoint;
-// use crate::dto::AuditReport;
-
-/*
-// =====================================================================
-// MAIN ENGINE EXECUTOR
-// =====================================================================
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt().with_writer(std::io::stderr).init();
-
-    let raw_domains = vec!["constechvina.vn", "saomocmedia.com", "  BAD INPUT "];
-
-    // UPDATED to use the hickory-resolve v0.26 Builder pattern
-    let resolver = TokioResolver::builder_tokio()?.build()?;
-
-    let client = Client::builder()
-        .timeout(Duration::from_secs(5))
-        .use_rustls_tls()
-        .build()?;
-
-    let mut join_set = JoinSet::new();
-
-    for raw in raw_domains {
-        let resolver_clone = resolver.clone();
-        let client_clone = client.clone();
-
-        join_set.spawn(async move {
-            // Newtype edge validation
-            let validated = match ValidatedDomain::try_new(raw) {
-                Ok(v) => v,
-                Err(e) => {
-                    warn!("Skipping invalid domain input: {}", e);
-                    return None; // Skip gracefully
-                }
-            };
-
-            // Typestate Engine Execution
-            let target = ReconTarget::new(validated);
-
-            // Compile-time guarantee: You CANNOT call verify_layer7() on a Pending or DnsFailed target.
-            let report = match target.resolve_dns(&resolver_clone).await {
-                Ok(resolved_target) => resolved_target.verify_layer7(&client_clone).await,
-                Err(failed_target) => failed_target.generate_report(),
-            };
-
-            Some(report)
-        });
-    }
-
-    let mut dossier = Vec::new();
-    while let Some(res) = join_set.join_next().await {
-        if let Ok(Some(report)) = res {
-            dossier.push(report);
-        }
-    }
-
-    println!("{}", serde_json::to_string_pretty(&dossier)?);
-    Ok(())
-}
-*/
+use ipv6_audit::quic_audit;
 
 // =====================================================================
 // CLI ARGUMENTS
 // =====================================================================
-/* For production
-#[derive(Parser, Debug)]
-#[command(author, version, about = "IPv6 Reconnaissance Engine", long_about = None)]
-struct Args {
-    /// Path to the text file containing domains (one per line)
-    #[arg(short, long)]
-    input: PathBuf,
 
-    /// Maximum number of concurrent network requests (Mechanical Sympathy bounds)
-    #[arg(short, long, default_value_t = 100)]
-    concurrency: usize,
+#[derive(clap::ValueEnum, Clone, Debug, Default)]
+pub enum BrowserProfile {
+    /// iOS/macOS Default (250ms head-start for IPv6)
+    #[default]
+    Safari,
+    /// Android/Desktop Chromium (300ms connection timeout for IPv4 fallback)
+    Chrome,
 }
-*/
+
+impl BrowserProfile {
+    pub fn fallback_delay(&self) -> Duration {
+        match self {
+            Self::Safari => Duration::from_millis(250),
+            Self::Chrome => Duration::from_millis(300),
+        }
+    }
+}
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "IPv6 Audit Engine", long_about = None)]
@@ -101,7 +44,7 @@ struct Args {
 struct InputGroup {
     /// Path to the text file containing domains (one per line)
     #[arg(short, long)]
-    pub input: Option<PathBuf>, // Made optional so --self-test can run alone
+    pub input: Option<PathBuf>,
 
     /// A single domain to scan directly
     #[arg(short, long)]
@@ -125,6 +68,14 @@ struct Args {
     /// EXPERT MODE: Perform a recursive root-to-TLD trace to enforce IPv6 Glue Record compliance
     #[arg(long, default_value_t = false)]
     strict_compliance: bool,
+
+    /// [E-commerce/Mobile] Execute Happy Eyeballs v3 Protocol Racing
+    #[arg(long, default_value_t = false)]
+    hev3_audit: bool,
+
+    /// Emulate a specific mobile browser's Happy Eyeballs fallback timer
+    #[arg(long, value_enum, default_value_t = BrowserProfile::Safari)]
+    pub emulate: BrowserProfile,
 }
 
 // =====================================================================
@@ -133,34 +84,65 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 0. Install Cryptographic Provider
+    let _ = default_provider().install_default();
+
+    // 1. Initialize Structured JSON Telemetry
     tracing_subscriber::fmt()
+        .json()
+        .flatten_event(true)
+        .with_max_level(Level::INFO)
         .with_writer(std::io::stderr)
         .with_ansi(false)
+        .with_span_list(true)
+        .with_current_span(true)
         .init();
 
-    // 1. Parse CLI Arguments
+    // 2. Parse Arguments & Self-Test Guard
     let args = Args::parse();
-
-    // 2. Initialize Network Clients
-    let resolver = TokioResolver::builder_tokio()?.build()?;
-    let client = Client::builder()
-        .timeout(Duration::from_secs(5))
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
         .use_rustls_tls()
         .build()?;
 
-    // 3. Initialize the Bounded Semaphore (The Throttle)
-    let semaphore = Arc::new(Semaphore::new(args.concurrency));
-    let mut join_set = JoinSet::new();
+    if args.inputs.self_test {
+        info!("Executing Layer 7 IPv6 Self-Test...");
+        match client.get("https://ipv6.google.com").send().await {
+            Ok(res) if res.status().is_success() => {
+                info!("✅ SUCCESS: This machine is actively routing traffic on the IPv6 internet.");
+            }
+            Ok(res) => error!(
+                "❌ FAILED: Reached the host, but received HTTP status {}",
+                res.status()
+            ),
+            Err(e) => error!(
+                "❌ FATAL: Cannot reach the IPv6 internet. Check router settings. Error: {}",
+                e
+            ),
+        }
+        return Ok(());
+    }
 
-    // 4. Stream the file line-by-line (Zero memory bloat)
-    // Ensure input file exists if we are NOT running a self-test
+    let target_display = args.inputs.domain.as_deref().unwrap_or("Bulk Mode");
+    info!(
+        "Starting IPv6 Audit Engine v0.2.0 for target: {}",
+        target_display
+    );
+
+    // 3. Initialize Global Clients & QUIC Endpoint
+    let resolver = TokioResolver::builder_tokio()?.build()?;
+    let quic_endpoint = if args.hev3_audit {
+        info!("HEv3 Audit enabled: Initializing shared IPv6 QUIC endpoint...");
+        Some(Arc::new(quic_audit::build_shared_ipv6_quic_endpoint()?))
+    } else {
+        None
+    };
+
+    // 4. Collect Targets
     let mut targets: Vec<String> = Vec::new();
-
-    if let Some(ref domain) = args.inputs.domain {
-        info!("Running single-target audit on: {}", domain);
-        targets.push(domain.to_string());
+    if let Some(domain) = args.inputs.domain {
+        targets.push(domain);
     } else if let Some(input_path) = args.inputs.input {
-        info!("Opening bulk target file: {:?}", input_path);
         let file = std::fs::File::open(input_path).expect("Failed to open input file");
         let reader = std::io::BufReader::new(file);
         for domain in std::io::BufRead::lines(reader).map_while(Result::ok) {
@@ -168,58 +150,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 targets.push(domain);
             }
         }
-    } else if args.inputs.self_test {
-        info!("Executing self-test...");
-        // --- THE IPv6 SELF-TEST ---
-        if args.inputs.self_test {
-            info!("Executing Layer 7 IPv6 Self-Test...");
-            // ipv6.google.com has no A (IPv4) record. It only exists on the IPv6 internet.
-            match client.get("https://ipv6.google.com").send().await {
-                Ok(res) if res.status().is_success() => {
-                    info!("✅ SUCCESS: This machine is actively routing traffic on the IPv6 internet.");
-                    return Ok(());
-                }
-                Ok(res) => {
-                    error!(
-                        "❌ FAILED: Reached the host, but received HTTP status {}",
-                        res.status()
-                    );
-                    return Ok(());
-                }
-                Err(e) => {
-                    error!("❌ FATAL: Cannot reach the IPv6 internet. Check Viettel/VNPT router settings. Error: {}", e);
-                    return Ok(());
-                }
-            }
-        }
     }
 
-    /*
-    // Determine the output file name dynamically
-    let output_filename = if let Some(domain) = &args.inputs.domain {
-        format!("{}_recon.csv", domain)
-    } else {
-        "prospects.csv".to_string()
-    };
-    */
+    // 5. Execute Concurrent Engine Tasks
+    let semaphore = Arc::new(Semaphore::new(args.concurrency));
+    let mut join_set = JoinSet::new();
 
-    // We no longer stream the file asynchronously here, because we already
-    // collected all targets into the `targets: Vec<String>` vector above!
-
-    // Iterate over the dynamically populated targets vector
     for raw in targets {
         let resolver_clone = resolver.clone();
         let client_clone = client.clone();
-
-        // Wait for a concurrency ticket BEFORE spawning the task
+        let quic_ref = quic_endpoint.clone();
         let permit = semaphore.clone().acquire_owned().await?;
+        let fallback_delay = args.emulate.fallback_delay();
+        let strict_compliance = args.strict_compliance;
 
         join_set.spawn(async move {
-            // Drop the permit at the very end of the task so another domain can start
             let _permit = permit;
-
-            // DELEGATE TO THE ENGINE
-            match scan_endpoint(&client_clone, &resolver_clone, &raw, args.strict_compliance).await
+            match scan_endpoint(
+                &client_clone,
+                &resolver_clone,
+                &raw,
+                strict_compliance,
+                quic_ref.as_deref(),
+                fallback_delay,
+            )
+            .await
             {
                 Ok(report) => Some(report),
                 Err(e) => {
@@ -230,100 +185,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
-    // 5. Collect Results
+    // 6. Collect & Synthesize Results
     let mut dossier: Vec<dto::AuditReport> = Vec::new();
-    // let mut dossier = [dto::ReconReport];
     while let Some(res) = join_set.join_next().await {
         if let Ok(Some(report)) = res {
-            // 1. Map the internal DomainReport to our presentation DTO
             let mut recon_dto = dto::AuditReport {
                 domain: report.domain.as_str().to_string(),
                 web_ipv6_ready: report.web_ipv6_ready,
                 web_ipv6_reachable: report.web_ipv6_reachable,
                 mx_ipv6_ready: report.mx_ipv6_ready,
                 ns_ipv6_ready: report.ns_ipv6_ready,
-                strict_glue_ready: report.strict_glue_ready.expect("REASON"),
-                vulnerability_status: String::new(), // We synthesize this next
+                strict_glue_ready: report.strict_glue_ready.unwrap_or(false),
+                fallback_penalty_ms: report.fallback_penalty_ms,
+                vulnerability_status: String::new(),
             };
-
-            // 2. Generate the executive text for the PDF/CSV
             recon_dto.synthesize_diagnosis();
-
-            // 3. Push the correctly typed DTO into the dossier
             dossier.push(recon_dto);
         }
     }
 
-    /*
-    // Output JSON strictly to stdout
-    println!("{}", serde_json::to_string_pretty(&dossier)?);
-    Ok(())
-    */
+    if dossier.is_empty() {
+        warn!("No valid targets were scanned. Exiting.");
+        return Ok(());
+    }
 
-    // 6. Extract the safely sanitized domain from our dossier (or fallback if empty)
-    let safe_name = dossier
-        .first()
-        .map(|r| r.domain.clone())
-        .unwrap_or_else(|| "bulk_audit_results".to_string());
+    // 7. Output Generation
+    let safe_name = dossier.first().map(|r| &r.domain).unwrap();
+    let is_bulk = dossier.len() > 1;
+    let base_filename = if is_bulk {
+        "bulk_audit_results".to_string()
+    } else {
+        safe_name.clone()
+    };
 
-    // 7. Generate OS-safe filenames
-    let csv_filename = format!("{}_audit.csv", safe_name);
-    let pdf_filename = format!("{}_audit.pdf", safe_name);
+    let csv_filename = format!("{}_audit.csv", base_filename);
+    let pdf_filename = format!("{}_audit.pdf", base_filename);
 
     info!("Writing final report to: {}", csv_filename);
-
-    // 8. Save the CSV
-    let mut wtr = csv::Writer::from_path(&csv_filename).unwrap_or_else(|e| {
-        panic!("Failed to create CSV writer: {}", e);
-    });
-
-    for record in &dossier {
-        wtr.serialize(record).expect("Failed to serialize record");
-    }
-    wtr.flush().expect("Failed to flush CSV");
-    info!("✅ Audit complete. CSV saved.");
-
-    // 9. Generate the Branded PDF
-    info!("Compiling executive PDF report to: {}", pdf_filename);
-    if let Err(e) = report::generate_pdf(&dossier, &pdf_filename) {
-        error!("❌ Failed to generate PDF report: {}", e);
-    } else {
-        info!("✅ Executive PDF report saved to {}.", pdf_filename);
-    }
-
-    /*
-    // 6. Output CSV to the physical file
-    info!("Writing final report to: {}", output_filename);
-    let mut wtr = csv::Writer::from_path(&output_filename).expect("Failed to create CSV writer");
-
+    let mut wtr = csv::Writer::from_path(&csv_filename)?;
     for record in &dossier {
         wtr.serialize(record)?;
     }
     wtr.flush()?;
+    info!("✅ Audit complete. CSV saved.");
 
-    // ... code that saves the CSV ...
-    info!("✅ Reconnaissance complete. CSV saved.");
-
-    // 7. Generate the Branded PDF
-    let pdf_filename = "prospects_audit_report.pdf";
     info!("Compiling executive PDF report to: {}", pdf_filename);
-
-    if let Err(e) = report::generate_pdf(&dossier, pdf_filename) {
+    if let Err(e) = report::generate_pdf(&dossier, &pdf_filename) {
         error!("❌ Failed to generate PDF report: {}", e);
     } else {
         info!("✅ Executive PDF report saved to {}.", pdf_filename);
     }
-
-    // 7. Generate the Branded PDF
-    let pdf_filename = output_filename.replace(".csv", ".pdf");
-    info!("Compiling executive PDF report to: {}", pdf_filename);
-
-    if let Err(e) = report::generate_pdf(&dossier, &pdf_filename) {
-        error!("Failed to generate PDF report: {}", e);
-    } else {
-        info!("✅ Executive PDF report saved to {}.", pdf_filename);
-    }
-    */
 
     Ok(())
 }

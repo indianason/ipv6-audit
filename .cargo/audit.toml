@@ -1,0 +1,21 @@
+[advisories]
+ignore = [
+    # RUSTSEC-2026-0194 & RUSTSEC-2026-0195: Denial of Service in quick-xml.
+    # Justification: Injected via typst-bake for internal layout processing. 
+    # ipv6-audit does not ingest, parse, or process untrusted user XML files.
+    # The attack vector is structurally unreachable.
+
+    # --- Active CVEs (Structurally Unreachable) ---
+    "RUSTSEC-2026-0194", # quick-xml DoS via typst-bake (no untrusted XML ingested)
+    "RUSTSEC-2026-0195", # quick-xml NsReader DoS via typst-bake (no untrusted XML ingested)
+
+    # --- Supply Chain Hygiene (Transitive / Compile-Time / Static Assets Only) ---
+    "RUSTSEC-2024-0436", # paste: compile-time macro only; zero runtime footprint
+    "RUSTSEC-2026-0543", # chrono: transitive via tracing/plotters; used only for log timestamps
+    "RUSTSEC-2025-0141", # bincode: internal asset serialization inside typst-bake
+    "RUSTSEC-2026-0192", # ttf-parser: parses only our own baked static fonts (typst-bake/plotters)
+    "RUSTSEC-2026-0206", # rustybuzz: text shaping for static baked fonts inside typst-bake
+    "RUSTSEC-2024-0320", # yaml-rust: transitive via typst metadata subsystem; unused at runtime
+    "RUSTSEC-2024-0449", # unsafe-libyaml: transitive via typst metadata subsystem; unused at runtime
+]
+

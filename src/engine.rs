@@ -3,10 +3,10 @@
 use crate::domain::errors::AuditError;
 use crate::domain::primitives::{AuditTarget, DomainReport, ValidatedDomain};
 use hickory_resolver::TokioResolver;
+use quinn::Endpoint;
 use reqwest::Client;
+use tokio::time::Duration;
 use tracing::{error, info, instrument, warn};
-
-// use crate::dto::ReconReport;
 
 #[instrument(skip(client, resolver))]
 pub async fn scan_endpoint(
@@ -14,6 +14,8 @@ pub async fn scan_endpoint(
     resolver: &TokioResolver,
     url: &str,
     strict_mode: bool,
+    quic_endpoint: Option<&Endpoint>,
+    fallback_delay: Duration,
 ) -> Result<DomainReport, AuditError> {
     // 1. Log the initiation of the engine's workflow
     info!("Initiating engine scan pipeline for target: {}", url);
@@ -36,7 +38,9 @@ pub async fn scan_endpoint(
     let report = match target.resolve_dns(resolver, strict_mode).await {
         Ok(resolved_target) => {
             info!("DNS phase successful, progressing to Layer-7 probe");
-            resolved_target.verify_layer7(client).await
+            resolved_target
+                .verify_layer7(client, quic_endpoint, fallback_delay)
+                .await
         }
         Err(failed_target) => {
             // We use error! here because a DNS failure is a critical break in the recon chain

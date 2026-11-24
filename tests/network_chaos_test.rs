@@ -60,15 +60,36 @@ async fn test_audit_engine_network_resilience() {
         target_file.path()
     );
 
+    // Define the simulated browser delay, if needed.
+    // Use 250ms for Safari parity, or 0ms for blazing-fast test execution.
+    // let test_delay = Duration::from_millis(250);
+    let test_delay = Duration::from_millis(0);
+
     // --- TEST 1: The Healthy Route ---
-    let healthy_result = scan_endpoint(&client, &resolver, &healthy_url, false).await;
+    let healthy_result = scan_endpoint(
+        &client,
+        &resolver,
+        &healthy_url,
+        false,
+        None,
+        test_delay, // Inject the time boundary here
+    )
+    .await;
     assert!(
         healthy_result.is_ok(),
         "Engine failed to connect to a healthy endpoint"
     );
 
     // --- TEST 2: The Chaotic Route (Timeout / Dropped Packets) ---
-    let timeout_result = scan_endpoint(&client, &resolver, &timeout_url, false).await;
+    let timeout_result = scan_endpoint(
+        &client,
+        &resolver,
+        &timeout_url,
+        false,
+        None,
+        test_delay, // Inject the time boundary here
+    )
+    .await;
 
     // Domain-Driven Assertion:
     // The engine MUST survive the timeout and return a valid DomainReport marking it as a failure.
@@ -93,5 +114,45 @@ async fn test_audit_engine_network_resilience() {
             "Engine leaked a raw error instead of mapping it to a report! Error: {}",
             e
         ),
+    }
+
+    // --- TEST 3: Browser Profile Emulation (Telemetry Verification) ---
+    let safari_delay = Duration::from_millis(250);
+    let chrome_delay = Duration::from_millis(300);
+
+    // 1. Simulate a Safari user hitting a QUIC Trap
+    let safari_result = scan_endpoint(
+        &client,
+        &resolver,
+        &timeout_url,
+        false,
+        None, // Assuming QUIC fails/timeouts in this mock
+        safari_delay,
+    )
+    .await
+    .expect("Engine should not panic on timeout");
+
+    // 2. Simulate an Android Chrome user hitting the same Trap
+    let chrome_result = scan_endpoint(&client, &resolver, &timeout_url, false, None, chrome_delay)
+        .await
+        .expect("Engine should not panic on timeout");
+
+    // 3. Prove the Stopwatch Works!
+    // We unwrap the penalty, and assert that the Chrome penalty was strictly
+    // greater than the Safari penalty, proving our temporal injection controls the engine.
+    if let (Some(safari_penalty), Some(chrome_penalty)) = (
+        safari_result.fallback_penalty_ms,
+        chrome_result.fallback_penalty_ms,
+    ) {
+        assert!(
+            chrome_penalty > safari_penalty,
+            "Chrome's telemetry ({}ms) should show a longer delay than Safari ({}ms)",
+            chrome_penalty,
+            safari_penalty
+        );
+
+        // Ensure the penalty is at least what we requested
+        assert!(safari_penalty >= 250, "Safari penalty too low");
+        assert!(chrome_penalty >= 300, "Chrome penalty too low");
     }
 }

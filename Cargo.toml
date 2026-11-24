@@ -1,6 +1,6 @@
 [package]
 name = "ipv6-audit"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Transvina"]
 description = "Enterprise IPv6 infrastructure audit and readiness analyzer for the 2026-2030 Vietnamese transition mandate"
@@ -12,11 +12,15 @@ categories = ["command-line-utilities", "network-programming"]
 [dependencies]
 # App Execution & Concurrency
 clap = { version = "4.6", features = ["derive"] }
-tokio = { version = "1.54", features = ["rt-multi-thread", "fs", "io-util", "macros"] }
+tokio = { version = "1.54", features = ["rt-multi-thread", "fs", "io-util", "macros", "test-util"] }
 
 # Business Engine
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "rustls-native-certs", "json"] }
 hickory-resolver = { version = "0.26", features = ["tokio", "system-config"] }
+
+# [NEW v0.2.0] Modern HTTP/3 and QUIC implementation for HEv3 probing
+quinn = "0.11"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 
 # Telemetry & Validation
 serde = { version = "1.0", features = ["derive"] }
@@ -25,9 +29,15 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 thiserror = "2.0"
 csv = "1.4"
+rustls-native-certs = "0.8.5"
+ring = "0.17.14"
+plotters = { version = "0.3.7", features = ["image"] }
+image = "0.25.10"
+typst-bake = "0.3.1"
 
-# PDF Generation
-genpdf = { version = "0.2.0", features = ["images"] }
+[package.metadata.typst-bake]
+template-dir = "./templates"
+fonts-dir = "./fonts"
 
 # ==========================================
 # ONLY COMPILED DURING `cargo test`
@@ -39,3 +49,26 @@ proptest = "1.12"
 # [Tier 3] Black-box Integration Testing
 wiremock = "0.6"
 tempfile = "3.10"
+
+# ==========================================
+# VIETTEL IDC EDGE DEPLOYMENT OPTIMIZATIONS
+# ==========================================
+[profile.release]
+opt-level = 3
+# lto = true
+lto = false           # Disables massive memory consumption
+# codegen-units = 1
+codegen-units = 16    # Splits compilation into 16 chunks to save RAM
+panic = "abort"
+strip = true
+
+[profile.dev]
+# Keep line numbers for your own ipv6-audit stack traces
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+# Strip debug symbols from third-party crates (typst, wasmi, rav1e, etc.)
+debug = 0
+
+[profile.dev.build-override]
+debug = 0
